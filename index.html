@@ -781,54 +781,54 @@ function fetchKline(code, region, ktype){
 function renderKline(data){
   var container=document.getElementById('kline-chart');
   container.innerHTML='';
-
   if(typeof LightweightCharts==='undefined'){
     container.innerHTML='<div style="text-align:center;padding:20px;font-size:12px;color:var(--muted);">图表库加载中，请稍后重试</div>';
     return;
   }
-
   var isDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;
   var chart=LightweightCharts.createChart(container,{
     width:container.offsetWidth,
     height:280,
-    layout:{
-      background:{type:'Solid',color:'transparent'},
-      textColor:isDark?'#888':'#888'
-    },
-    grid:{
-      vertLines:{color:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'},
-      horzLines:{color:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'}
-    },
+    layout:{background:{type:'Solid',color:'transparent'},textColor:isDark?'#888':'#888'},
+    grid:{vertLines:{color:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'},horzLines:{color:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'}},
     rightPriceScale:{borderColor:'transparent'},
     timeScale:{borderColor:'transparent',timeVisible:true}
   });
 
-  var series=chart.addCandlestickSeries({
-    upColor:'#c0392b',
-    downColor:'#1a7a3a',
-    borderUpColor:'#c0392b',
-    borderDownColor:'#1a7a3a',
-    wickUpColor:'#c0392b',
-    wickDownColor:'#1a7a3a'
-  });
+  if(currentKtype===1){
+    // 分时：折线图，只显示今天数据
+    var todayStart=new Date();
+    todayStart.setHours(0,0,0,0);
+    var todayStartMs=todayStart.getTime();
 
-  var isIntraday = currentKtype === 1;
-  var candles=data.map(function(d){
-      var ts = isIntraday ? Math.floor(d.t/1000) + 8*3600 : Math.floor(d.t/1000) + 8*3600;
-      var date = new Date(d.t + 8*3600*1000);
+    var filtered=data.filter(function(d){
+      return d.t+8*3600*1000 >= todayStartMs;
+    });
+    if(!filtered.length) filtered=data.slice(-240);
+
+    var series=chart.addLineSeries({color:'#2d6a2d',lineWidth:1,priceLineVisible:true});
+    var points=filtered.map(function(d){
+      return {time:Math.floor(d.t/1000)+8*3600, value:d.c};
+    }).sort(function(a,b){return a.time-b.time;});
+    series.setData(points);
+  } else {
+    // 日K/周K：蜡烛图
+    var series=chart.addCandlestickSeries({
+      upColor:'#c0392b',downColor:'#1a7a3a',
+      borderUpColor:'#c0392b',borderDownColor:'#1a7a3a',
+      wickUpColor:'#c0392b',wickDownColor:'#1a7a3a'
+    });
+    var candles=data.map(function(d){
+      var date=new Date(d.t+8*3600*1000);
       return {
-      time: isIntraday ? (Math.floor(d.t/1000) + 8*3600) : (date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0')),
-      open: d.o, high: d.h, low: d.l, close: d.c
-    };
-  }).sort(function(a,b){return a.time-b.time;});
-
-  series.setData(candles);
+        time:date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0'),
+        open:d.o,high:d.h,low:d.l,close:d.c
+      };
+    }).sort(function(a,b){return a.time>b.time?1:-1;});
+    series.setData(candles);
+  }
   chart.timeScale().fitContent();
-  lwChart=chart; candleSeries=series;
-
-  window.addEventListener('resize',function(){
-    chart.applyOptions({width:container.offsetWidth});
-  });
+  window.addEventListener('resize',function(){chart.applyOptions({width:container.offsetWidth});});
 }
 
 // background lines animation
