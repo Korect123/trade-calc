@@ -756,7 +756,8 @@ function fetchKline(code, region, ktype){
   document.getElementById('kline-error').style.display='none';
   document.getElementById('kline-chart').style.display='none';
 
-  fetch('/api/kline?region='+region+'&code='+code+'&ktype='+currentKtype+'&num=90')
+  var numBars = currentKtype >= 8 ? 120 : 200;
+  fetch('/api/kline?region='+region+'&code='+code+'&ktype='+currentKtype+'&num='+numBars)
   .then(function(r){return r.json();})
   .then(function(res){
     document.getElementById('kline-loading').style.display='none';
