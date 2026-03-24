@@ -747,9 +747,13 @@ function switchKtype(ktype, btn){
   document.querySelectorAll('.ktype-btn').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
   currentKtype=ktype;
-  if(currentKcode) fetchKline(currentKcode, currentKregion, ktype);
+  if(currentKcode) fetchKline(currentKcode, currentKregion, currentKtype);
 }
 
+currentKtype=8;
+document.querySelectorAll('.ktype-btn').forEach(function(b){b.classList.remove('active');});
+document.querySelectorAll('.ktype-btn')[0].classList.add('active');
+fetchKline(code, region, currentKtype);
 function fetchKline(code, region, ktype){
   currentKcode=code; currentKregion=region; currentKtype=ktype||101;
   document.getElementById('kline-loading').style.display='block';
