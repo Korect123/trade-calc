@@ -809,9 +809,12 @@ function renderKline(data){
     wickDownColor:'#1a7a3a'
   });
 
+  var isIntraday = currentKtype < 8;
   var candles=data.map(function(d){
-    return {
-      time: Math.floor(d.t/1000) + 8*3600,
+      var ts = isIntraday ? Math.floor(d.t/1000) + 8*3600 : Math.floor(d.t/1000) + 8*3600;
+      var date = new Date(d.t + 8*3600*1000);
+      return {
+      time: isIntraday ? (Math.floor(d.t/1000) + 8*3600) : (date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0')),
       open: d.o, high: d.h, low: d.l, close: d.c
     };
   }).sort(function(a,b){return a.time-b.time;});
