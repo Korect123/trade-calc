@@ -431,10 +431,10 @@ function calcMain(){
   // 保本价：卖出后净利润=0
   // shares×P - shares×P×0.0003 - shares×P×0.0005 = ab + bf
   // shares×P×(1-0.0008) = ab+bf
-  var sell_fee_min=Math.max(5,shares*1.7*0.0003);
-  var be_sell=shares*(ab+bf+sell_fee_min)/(shares-shares*0.0005);
-  var actual_sell_fee=Math.max(5,be_sell*0.0003);
-  var be_price=(ab+bf+actual_sell_fee)/(shares*(1-0.0005));
+  var be_sell_fee=Math.max(5,ab*0.0003);
+  var be_price=(ab+bf+be_sell_fee)/(shares*(1-0.0005));
+  var actual_be_sell_fee=Math.max(5,shares*be_price*0.0003);
+  be_price=(ab+bf+actual_be_sell_fee)/(shares*(1-0.0005));
   var be_pct=(be_price-bp)/bp*100;
 
   document.getElementById('shares_display').textContent=shares.toLocaleString()+' 股';
