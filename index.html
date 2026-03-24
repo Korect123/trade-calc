@@ -811,7 +811,7 @@ function renderKline(data){
 
   var candles=data.map(function(d){
     return {
-      time: Math.floor(d.t/1000),
+      time: Math.floor(d.t/1000) + 8*3600,
       open: d.o, high: d.h, low: d.l, close: d.c
     };
   }).sort(function(a,b){return a.time-b.time;});
