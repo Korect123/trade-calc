@@ -514,10 +514,7 @@ function fetchQuote(){
   document.getElementById('quote-error').style.display='none';
   document.getElementById('quote-result').style.display='none';
 
-  fetch('https://api.itick.org/stock/quote?region='+region+'&code='+code,{
-    method:'GET',
-    headers:{'accept':'application/json','token':ITICK_TOKEN}
-  })
+  fetch('/api/quote?region='+region+'&code='+code)
   .then(function(r){return r.json();})
   .then(function(res){
     document.getElementById('quote-loading').style.display='none';
