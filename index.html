@@ -492,8 +492,10 @@ function calcMain(){
   document.getElementById('shares_display').textContent=shares.toLocaleString()+' 股';
   document.getElementById('buy_fee').textContent=fmtAbs(bf);
   document.getElementById('buy_transfer').textContent=fmtAbs(bf_tf);
-  document.getElementById('breakeven_price').textContent=be_price.toFixed(2)+' 元';
-  document.getElementById('breakeven').textContent='+'+be_pct.toFixed(2)+'%';
+  var be_display=Math.ceil(be_price*100)/100;
+  document.getElementById('breakeven_price').textContent=be_display.toFixed(2)+' 元';
+  var be_pct_display=(be_display-bp)/bp*100;
+  document.getElementById('breakeven').textContent='+'+be_pct_display.toFixed(2)+'%';
 
   if(!sellOk) return;
 
