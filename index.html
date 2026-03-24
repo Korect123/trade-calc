@@ -523,15 +523,15 @@ function fetchQuote(){
       document.getElementById('quote-error').textContent='未找到该股票，请检查代码（如：600519、000001）';
       return;
     }
-    var d=res.data[0];
-    var price=d.lp||d.cp||0;
-    var prevClose=d.ycp||0;
-    var open=d.op||0;
-    var high=d.hp||0;
-    var low=d.lop||0;
-    var name=d.name||code;
-    var change=price-prevClose;
-    var changePct=prevClose>0?(change/prevClose*100):0;
+    var d=res.data;
+    var price=d.ld||0;
+    var prevClose=d.p||0;
+    var open=d.o||0;
+    var high=d.h||0;
+    var low=d.l||0;
+    var name=d.s||code;
+    var change=d.ch||0;
+    var changePct=d.chp||0;
     lastQuotePrice=price;
 
     document.getElementById('q-name').textContent=name;
