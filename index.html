@@ -748,7 +748,7 @@ function switchKtype(ktype, btn){
   if(currentKcode) fetchKline(currentKcode, currentKregion, currentKtype);
 }
 
-currentKtype=8;
+currentKtype=1;
 document.querySelectorAll('.ktype-btn').forEach(function(b){b.classList.remove('active');});
 document.querySelectorAll('.ktype-btn')[0].classList.add('active');
 fetchKline(code, region, currentKtype);
@@ -758,7 +758,7 @@ function fetchKline(code, region, ktype){
   document.getElementById('kline-error').style.display='none';
   document.getElementById('kline-chart').style.display='none';
 
-  var numBars = currentKtype >= 8 ? 120 : 200;
+  var numBars = currentKtype >= 8 ? 120 : 300;
   fetch('/api/kline?region='+region+'&code='+code+'&ktype='+currentKtype+'&num='+numBars)
   .then(function(r){return r.json();})
   .then(function(res){
