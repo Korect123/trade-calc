@@ -158,6 +158,13 @@ footer{text-align:center;font-size:11px;color:var(--hint);font-family:var(--mono
         <div class="mode-btn active" id="mode-amount" onclick="setMode('amount')">按金额买入</div>
         <div class="mode-btn" id="mode-shares" onclick="setMode('shares')">按股数买入</div>
       </div>
+      <div class="field">
+        <label>股票代码</label>
+        <input type="text" id="stock_code" placeholder="选填，自动识别费率" maxlength="6"
+          style="flex:1;height:38px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--mono);font-size:14px;padding:0 12px;outline:none;transition:border-color 0.15s;"
+          oninput="this.value=this.value.replace(/\D/g,'');calcMain()">
+        <span class="unit" id="stock-type-label" style="width:52px;font-size:11px;color:var(--accent);text-align:right;"></span>
+      </div>
       <div class="field" id="field-amount">
         <label>买入金额</label>
         <input type="number" id="amount" placeholder="例：10000" min="100" step="100" oninput="calcMain()">
@@ -201,7 +208,8 @@ footer{text-align:center;font-size:11px;color:var(--hint);font-family:var(--mono
       <div class="card">
         <div class="card-label">买入手续费</div>
         <div class="fee-rows">
-          <div class="fee-row"><span class="fn">买入佣金（万3，最低5元）</span><span class="fv" id="buy_fee">—</span></div>
+          <div class="fee-row"><span class="fn" id="lbl-buy-commission">买入佣金（万2.5，最低5元）</span><span class="fv" id="buy_fee">—</span></div>
+          <div class="fee-row" id="row-buy-transfer"><span class="fn">过户费（沪市 × 0.001%）</span><span class="fv" id="buy_transfer">—</span></div>
         </div>
       </div>
     </div>
@@ -222,9 +230,11 @@ footer{text-align:center;font-size:11px;color:var(--hint);font-family:var(--mono
       <div class="card">
         <div class="card-label">完整手续费明细</div>
         <div class="fee-rows">
-          <div class="fee-row"><span class="fn">买入佣金（万3，最低5元）</span><span class="fv" id="buy_fee2">—</span></div>
-          <div class="fee-row"><span class="fn">卖出佣金（万3，最低5元）</span><span class="fv" id="sell_fee">—</span></div>
-          <div class="fee-row"><span class="fn">印花税（卖出 × 0.05%）</span><span class="fv" id="stamp">—</span></div>
+          <div class="fee-row"><span class="fn" id="lbl-buy-comm2">买入佣金（万2.5，最低5元）</span><span class="fv" id="buy_fee2">—</span></div>
+          <div class="fee-row" id="row-buy-transfer2"><span class="fn">买入过户费（沪市 × 0.001%）</span><span class="fv" id="buy_transfer2">—</span></div>
+          <div class="fee-row" id="row-sell-comm"><span class="fn" id="lbl-sell-comm">卖出佣金（万2.5，最低5元）</span><span class="fv" id="sell_fee">—</span></div>
+          <div class="fee-row" id="row-sell-transfer"><span class="fn">卖出过户费（沪市 × 0.001%）</span><span class="fv" id="sell_transfer">—</span></div>
+          <div class="fee-row" id="row-stamp"><span class="fn">印花税（卖出 × 0.05%）</span><span class="fv" id="stamp">—</span></div>
           <div class="fee-divider"></div>
           <div class="fee-row fee-total"><span class="fn">总手续费</span><span class="fv" id="total_fee">—</span></div>
         </div>
@@ -392,6 +402,25 @@ function setMode(m){
   calcMain();
 }
 
+function getStockType(code){
+  if(!code||code.length<1) return 'sh'; // default Shanghai
+  if(/^(51|15|16|17|18)/.test(code)) return 'etf';
+  if(/^(6|9)/.test(code)) return 'sh';
+  if(/^(0|1|2|3)/.test(code)) return 'sz';
+  if(/^(4|8)/.test(code)) return 'bj';
+  return 'sh';
+}
+
+function getFees(amount, type){
+  // commission 万2.5, min 5
+  var comm=Math.max(5, amount*0.00025);
+  // stamp duty: SH/SZ A股 0.05%, ETF免
+  var stamp=(type==='etf')?0:(amount*0.0005);
+  // transfer fee: SH only 0.001% both ways, ETF免
+  var transfer=(type==='sh')?(amount*0.00001):0;
+  return {comm:comm, stamp:stamp, transfer:transfer};
+}
+
 function hasBuyInputs(){
   var bp=parseFloat(document.getElementById('buy_price').value);
   if(!bp) return false;
@@ -412,9 +441,19 @@ function calcMain(){
   document.getElementById('results-sell').classList.toggle('visible', sellOk);
   if(!buyOk) return;
 
+  var code=document.getElementById('stock_code').value.trim();
+  var stype=getStockType(code);
+  var typeLabels={'sh':'沪市A股','sz':'深市A股','etf':'ETF基金','bj':'北交所'};
+  document.getElementById('stock-type-label').textContent=code?typeLabels[stype]:'';
+
+  // show/hide transfer rows
+  var hasTf=(stype==='sh');
+  document.getElementById('row-buy-transfer').style.display=hasTf?'':'none';
+  document.getElementById('row-buy-transfer2').style.display=hasTf?'':'none';
+  document.getElementById('row-sell-transfer').style.display=hasTf?'':'none';
+  document.getElementById('row-stamp').style.display=(stype==='etf')?'none':'';
+
   var bp=parseFloat(document.getElementById('buy_price').value);
-  var tp_pct=parseFloat(document.getElementById('tp_pct').value)||0;
-  var sl_pct=parseFloat(document.getElementById('sl_pct').value)||0;
   var shares;
   if(mode==='amount'){
     var amount=parseFloat(document.getElementById('amount').value);
@@ -426,19 +465,33 @@ function calcMain(){
   }
 
   var ab=shares*bp;
-  var bf=Math.max(5,ab*0.0003);
+  var buyF=getFees(ab, stype);
+  var bf=buyF.comm;
+  var bf_tf=buyF.transfer;
+  var buy_total=bf+bf_tf;
 
-  // 保本价：卖出后净利润=0
-  // shares×P - shares×P×0.0003 - shares×P×0.0005 = ab + bf
-  // shares×P×(1-0.0008) = ab+bf
-  var be_sell_fee=Math.max(5,ab*0.0003);
-  var be_price=(ab+bf+be_sell_fee)/(shares*(1-0.0005));
-  var actual_be_sell_fee=Math.max(5,shares*be_price*0.0003);
-  be_price=(ab+bf+actual_be_sell_fee)/(shares*(1-0.0005));
+  // 保本价：迭代法，净利润=0时的卖出价
+  // 净利润 = shares*P - ab - buy_total - sell_comm - sell_transfer - sell_stamp = 0
+  // 先估算，再迭代一次
+  var be_price=ab/(shares*0.9995); // 初始估算
+  for(var i=0;i<3;i++){
+    var sellF=getFees(shares*be_price, stype);
+    be_price=(ab+buy_total+sellF.comm+sellF.transfer)/shares/(1-0.0005*(stype!=='etf'?1:0));
+    // 修正：stamp是固定比例，重新算
+    var sp_est=shares*be_price;
+    var sell_comm_est=Math.max(5,sp_est*0.00025);
+    var sell_tf_est=(stype==='sh')?(sp_est*0.00001):0;
+    var sell_st_est=(stype!=='etf')?(sp_est*0.0005):0;
+    be_price=(ab+buy_total+sell_comm_est+sell_tf_est+sell_st_est)/shares+ab/shares*0;
+    be_price=(ab+buy_total)/(shares-(stype!=='etf'?shares*0.0005:0)-shares*0.00025-((stype==='sh')?shares*0.00001:0));
+    // simpler: solve numerically
+    be_price=(ab+buy_total+Math.max(5,be_price*shares*0.00025)+((stype==='sh')?be_price*shares*0.00001:0))/(shares*(stype!=='etf'?(1-0.0005):1));
+  }
   var be_pct=(be_price-bp)/bp*100;
 
   document.getElementById('shares_display').textContent=shares.toLocaleString()+' 股';
   document.getElementById('buy_fee').textContent=fmtAbs(bf);
+  document.getElementById('buy_transfer').textContent=fmtAbs(bf_tf);
   document.getElementById('breakeven_price').textContent=be_price.toFixed(2)+' 元';
   document.getElementById('breakeven').textContent='+'+be_pct.toFixed(2)+'%';
 
@@ -446,11 +499,15 @@ function calcMain(){
 
   var sp=parseFloat(document.getElementById('sell_price').value);
   var as_=shares*sp;
-  var sf=Math.max(5,as_*0.0003), st=as_*0.0005;
-  var tf=bf+sf+st, gross=as_-ab, net=gross-tf;
+  var sellF2=getFees(as_, stype);
+  var sf=sellF2.comm, sf_tf=sellF2.transfer, st=sellF2.stamp;
+  var tf=buy_total+sf+sf_tf+st;
+  var gross=as_-ab, net=gross-tf;
 
   document.getElementById('buy_fee2').textContent=fmtAbs(bf);
+  document.getElementById('buy_transfer2').textContent=fmtAbs(bf_tf);
   document.getElementById('sell_fee').textContent=fmtAbs(sf);
+  document.getElementById('sell_transfer').textContent=fmtAbs(sf_tf);
   document.getElementById('stamp').textContent=fmtAbs(st);
   document.getElementById('total_fee').textContent=fmtAbs(tf);
   setResult('gross',gross,gross/ab*100);
@@ -521,7 +578,7 @@ function fetchQuote(){
   .then(function(r){return r.json();})
   .then(function(res){
     document.getElementById('quote-loading').style.display='none';
-    if(res.code!==0||!res.data||!res.data){
+    if(res.code!==0||!res.data){
       document.getElementById('quote-error').style.display='block';
       document.getElementById('quote-error').textContent='未找到该股票，请检查代码（如：600519、000001）';
       return;
