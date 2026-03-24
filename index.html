@@ -130,6 +130,8 @@ h1 em{font-style:normal;font-weight:500;color:var(--accent);}
 .clear-btn{width:100%;padding:10px;border-radius:var(--radius-sm);background:transparent;border:1px solid var(--red-border);color:var(--red);font-size:12px;cursor:pointer;transition:all 0.15s;margin-top:6px;font-family:var(--sans);opacity:0.7;}
 .clear-btn:hover{opacity:1;}
 .empty-records{text-align:center;padding:40px 0;color:var(--hint);font-size:13px;line-height:1.8;}
+.ktype-btn{padding:6px 12px;border-radius:var(--radius-sm);background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:12px;cursor:pointer;transition:all 0.15s;font-family:var(--sans);}
+.ktype-btn.active{background:var(--accent-bg);border-color:var(--accent-border);color:var(--accent);font-weight:500;}
 footer{text-align:center;font-size:11px;color:var(--hint);font-family:var(--mono);margin-top:48px;letter-spacing:0.05em;}
 </style>
 </head>
@@ -279,6 +281,20 @@ footer{text-align:center;font-size:11px;color:var(--hint);font-family:var(--mono
         </div>
         <div style="margin-top:8px;font-size:11px;color:var(--hint);font-family:var(--mono);text-align:right;" id="q-time">—</div>
       </div>
+
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <button class="ktype-btn active" onclick="switchKtype(101,this)">日K</button>
+        <button class="ktype-btn" onclick="switchKtype(102,this)">周K</button>
+        <button class="ktype-btn" onclick="switchKtype(60,this)">60分</button>
+        <button class="ktype-btn" onclick="switchKtype(30,this)">30分</button>
+        <button class="ktype-btn" onclick="switchKtype(15,this)">15分</button>
+      </div>
+      <div class="card" style="padding:12px;margin-bottom:8px;">
+        <div id="kline-loading" style="display:none;text-align:center;padding:20px;font-size:13px;color:var(--muted);">加载K线中...</div>
+        <div id="kline-error" style="display:none;text-align:center;padding:20px;font-size:13px;color:var(--red);"></div>
+        <div id="kline-chart" style="width:100%;height:280px;"></div>
+      </div>
+
       <button class="save-btn" onclick="useQuotePrice()" style="margin-bottom:0;">使用当前价格填入盈亏计算</button>
     </div>
   </div>
@@ -378,6 +394,7 @@ footer{text-align:center;font-size:11px;color:var(--hint);font-family:var(--mono
   <footer>每次操作前对照 · 止损优先</footer>
 </div>
 
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 var mode='amount';
 var batchData=[{price:'',shares:''},{price:'',shares:''}];
@@ -492,10 +509,8 @@ function calcMain(){
   document.getElementById('shares_display').textContent=shares.toLocaleString()+' 股';
   document.getElementById('buy_fee').textContent=fmtAbs(bf);
   document.getElementById('buy_transfer').textContent=fmtAbs(bf_tf);
-  var be_display=Math.ceil(be_price*100)/100;
-  document.getElementById('breakeven_price').textContent=be_display.toFixed(2)+' 元';
-  var be_pct_display=(be_display-bp)/bp*100;
-  document.getElementById('breakeven').textContent='+'+be_pct_display.toFixed(2)+'%';
+  document.getElementById('breakeven_price').textContent=be_price.toFixed(2)+' 元';
+  document.getElementById('breakeven').textContent='+'+be_pct.toFixed(2)+'%';
 
   if(!sellOk) return;
 
@@ -608,6 +623,7 @@ function fetchQuote(){
     var ts=d.t?new Date(d.t).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—';
     document.getElementById('q-time').textContent=ts;
     document.getElementById('quote-result').style.display='block';
+    fetchKline(code, region, currentKtype);
   })
   .catch(function(){
     document.getElementById('quote-loading').style.display='none';
@@ -723,6 +739,91 @@ function deleteRecord(i){records.splice(i,1);localStorage.setItem('trade_records
 function clearRecords(){if(!confirm('确定清空所有记录？'))return;records=[];localStorage.setItem('trade_records',JSON.stringify(records));renderRecords();}
 
 renderBatch();
+
+// K-line chart
+var currentKcode='', currentKregion='', currentKtype=101, lwChart=null, candleSeries=null;
+
+function switchKtype(ktype, btn){
+  document.querySelectorAll('.ktype-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  currentKtype=ktype;
+  if(currentKcode) fetchKline(currentKcode, currentKregion, ktype);
+}
+
+function fetchKline(code, region, ktype){
+  currentKcode=code; currentKregion=region; currentKtype=ktype||101;
+  document.getElementById('kline-loading').style.display='block';
+  document.getElementById('kline-error').style.display='none';
+  document.getElementById('kline-chart').style.display='none';
+
+  fetch('/api/kline?region='+region+'&code='+code+'&ktype='+currentKtype+'&num=90')
+  .then(function(r){return r.json();})
+  .then(function(res){
+    document.getElementById('kline-loading').style.display='none';
+    if(res.code!==0||!res.data||!res.data.length){
+      document.getElementById('kline-error').style.display='block';
+      document.getElementById('kline-error').textContent='暂无K线数据';
+      return;
+    }
+    document.getElementById('kline-chart').style.display='block';
+    renderKline(res.data);
+  })
+  .catch(function(){
+    document.getElementById('kline-loading').style.display='none';
+    document.getElementById('kline-error').style.display='block';
+    document.getElementById('kline-error').textContent='K线加载失败';
+  });
+}
+
+function renderKline(data){
+  var container=document.getElementById('kline-chart');
+  container.innerHTML='';
+
+  if(typeof LightweightCharts==='undefined'){
+    container.innerHTML='<div style="text-align:center;padding:20px;font-size:12px;color:var(--muted);">图表库加载中，请稍后重试</div>';
+    return;
+  }
+
+  var isDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;
+  var chart=LightweightCharts.createChart(container,{
+    width:container.offsetWidth,
+    height:280,
+    layout:{
+      background:{type:'Solid',color:'transparent'},
+      textColor:isDark?'#888':'#888'
+    },
+    grid:{
+      vertLines:{color:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'},
+      horzLines:{color:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'}
+    },
+    rightPriceScale:{borderColor:'transparent'},
+    timeScale:{borderColor:'transparent',timeVisible:true}
+  });
+
+  var series=chart.addCandlestickSeries({
+    upColor:'#c0392b',
+    downColor:'#1a7a3a',
+    borderUpColor:'#c0392b',
+    borderDownColor:'#1a7a3a',
+    wickUpColor:'#c0392b',
+    wickDownColor:'#1a7a3a'
+  });
+
+  var candles=data.map(function(d){
+    return {
+      time: Math.floor(d.t/1000),
+      open: d.o, high: d.h, low: d.l, close: d.c
+    };
+  }).sort(function(a,b){return a.time-b.time;});
+
+  series.setData(candles);
+  chart.timeScale().fitContent();
+  lwChart=chart; candleSeries=series;
+
+  window.addEventListener('resize',function(){
+    chart.applyOptions({width:container.offsetWidth});
+  });
+}
 
 // background lines animation
 (function(){
